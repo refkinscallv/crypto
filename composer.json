@@ -1,0 +1,20 @@
+{
+    "name": "refkinscallv/crypto",
+    "description": "PHP Cryptographic Library",
+    "version": "1.0.0",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "RF\\Crypto\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Refkinscallv",
+            "email": "refkinscallv@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {}
+}
