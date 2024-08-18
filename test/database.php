@@ -38,9 +38,9 @@
     ]);
 
     // Encrypt data
-    $encryptedHash = $crypt->encrypt(rand(1,999999999999) ." - ". date("Y-m-d H:i:s"));
+    $encryptedHash = $crypt->encrypt(["hello" => "world"], "array");
 
     // Decrypt data
-    $decryptedData = $crypt->decrypt($encryptedHash);
+    $decryptedData = $crypt->decrypt($encryptedHash, "array");
 
-    echo $decryptedData;
+    echo $decryptedData["hello"];

@@ -110,7 +110,7 @@
          * 
          * @return string|false MD5 hash of the encrypted data or false on failure.
          */
-        public function encrypt(string $data, string $type = "string") {
+        public function encrypt($data, string $type = "string") {
             if (!$data) {
                 return false;
             }
@@ -137,7 +137,7 @@
          * 
          * @return string|array|false Decrypted data or false on failure.
          */
-        public function decrypt(string $data, string $type = "string") {
+        public function decrypt($data, string $type = "string") {
             if (!$data) {
                 return false;
             }
