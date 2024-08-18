@@ -20,14 +20,16 @@ $crypt = new Crypto([
     "encryptStoreMethod" => "local"  // Storage method
 ]);
 
+// Set a custom file path
+// $crypt->setFile("/path/to/anotherFile.txt");
+
 // Encrypt data
 $encryptedHash = $crypt->encrypt("Sensitive Data");
+// $encryptedHash = $crypt->encrypt([1, 2, 3], "array"); if array
 
 // Decrypt data
 $decryptedData = $crypt->decrypt($encryptedHash);
-
-// Set a custom file path
-$crypt->setFile("/path/to/anotherFile.txt");
+// $decryptedData = $crypt->decrypt($encryptedHash, "array"); if array
 
 ?>
 ```
@@ -69,9 +71,11 @@ $crypt = new Crypto([
 
 // Encrypt data
 $encryptedHash = $crypt->encrypt("Sensitive Data");
+// $encryptedHash = $crypt->encrypt([1, 2, 3], "array"); if array
 
 // Decrypt data
 $decryptedData = $crypt->decrypt($encryptedHash);
+// $decryptedData = $crypt->decrypt($encryptedHash, "array"); if array
 
 ?>
 ```
