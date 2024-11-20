@@ -1,10 +1,20 @@
+# Crypto Class Documentation
+
+The `Crypto` class provides encryption and decryption functionalities with support for two storage methods: **local file storage** and **database storage**. Below is the complete guide for usage and configuration.
+
+---
+
+## Features
+
+- **Customizable encryption key and cipher**
+- **Local file storage with optional line limits**
+- **Database storage with a user-defined handler**
+
+---
+
 ## Usage Documentation
 
-The `Crypto` class provides encryption and decryption functionalities with support for two storage methods: local file storage and database storage. This documentation explains how to use the `Crypto` class and customize its configuration.
-
-### Basic Usage
-
-#### Local File Storage
+### Local File Storage
 
 ```php
 <?php
@@ -20,9 +30,6 @@ $crypt = new Crypto([
     "encryptStoreMethod" => "local"  // Storage method
 ]);
 
-// Set a custom file path
-// $crypt->setFile("/path/to/anotherFile.txt");
-
 // Encrypt data
 $encryptedHash = $crypt->encrypt("Sensitive Data");
 // $encryptedHash = $crypt->encrypt([1, 2, 3], "array"); if array
@@ -30,11 +37,9 @@ $encryptedHash = $crypt->encrypt("Sensitive Data");
 // Decrypt data
 $decryptedData = $crypt->decrypt($encryptedHash);
 // $decryptedData = $crypt->decrypt($encryptedHash, "array"); if array
-
-?>
 ```
 
-#### Database Storage
+### Database Storage
 
 ```php
 <?php
@@ -50,19 +55,18 @@ $crypt = new Crypto([
         global $db; // Assume $db is a database connection object
 
         if ($mode === "write") {
-            // Example: Insert encrypted data into the database
+            // Insert encrypted data into the database
             $rawData = explode(":", $data);
             $query = "INSERT INTO table_encrypt (column_md5, column_actual_encrypt) VALUES (?, ?)";
             $stmt = $db->prepare($query);
             $stmt->execute([$rawData[1], $rawData[0]]);
             return $stmt->rowCount();
         } elseif ($mode === "read") {
-            // Example: Retrieve decrypted data from the database
+            // Retrieve decrypted data from the database
             $query = "SELECT column_actual_encrypt FROM table_encrypt WHERE column_md5 = ? LIMIT 1";
             $stmt = $db->prepare($query);
             $stmt->execute([$data]);
-            $result = $stmt->fetchColumn();
-            return $result ? $result : false;
+            return $stmt->fetchColumn();
         }
 
         return false;
@@ -76,61 +80,95 @@ $encryptedHash = $crypt->encrypt("Sensitive Data");
 // Decrypt data
 $decryptedData = $crypt->decrypt($encryptedHash);
 // $decryptedData = $crypt->decrypt($encryptedHash, "array"); if array
-
-?>
 ```
 
-### Class Methods
+---
 
-#### `__construct(array $args)`
+## API Reference
 
-Constructor method to initialize the `Crypto` object with configuration settings.
+### `__construct(array $args)`
 
-- **Parameters:**
-  - `array $args`: Configuration array with keys:
-    - `encryptKey` (string): Secret key for encryption.
-    - `encryptFile` (string, optional): Path to the local file for storage.
-    - `encryptLimitLine` (int, optional): Maximum number of lines to keep in the local file.
-    - `encryptCipher` (string, optional): Encryption cipher to use.
-    - `encryptStoreMethod` (string, optional): Storage method, either 'local' or 'database'.
-    - `encryptDBHandler` (callable, optional): Closure function for database operations (required if using 'database').
+- **Description**: Initializes the `Crypto` object.
+- **Parameters**:
+  - `encryptKey` *(string)*: Secret key for encryption.
+  - `encryptFile` *(string, optional)*: Path for file storage.
+  - `encryptLimitLine` *(int, optional)*: Max lines for file storage.
+  - `encryptCipher` *(string, optional)*: Encryption cipher (default: `AES-256-CBC`).
+  - `encryptStoreMethod` *(string)*: Storage method, either `local` or `database`.
+  - `encryptDBHandler` *(callable, optional)*: Function for database operations.
+- **Throws**: `Exception` if configuration is invalid.
 
-- **Throws:**
-  - `Exception` if configuration is invalid or required fields are missing.
+### `setFile(string $filePath): void`
 
-#### `setFile(string $filePath): void`
+- **Description**: Sets a custom file path.
+- **Parameters**:
+  - `$filePath` *(string)*: Path to the file.
 
-Sets a custom file path for local storage.
+### `encrypt(string|array $data, string $type = "string"): string|false`
 
-- **Parameters:**
-  - `string $filePath`: Path to the file.
+- **Description**: Encrypts data.
+- **Parameters**:
+  - `$data` *(string|array)*: Data to be encrypted.
+  - `$type` *(string)*: Type of data (`string` or `array`).
+- **Returns**: MD5 hash of the encrypted data or `false` on failure.
 
-#### `encrypt(string $data, string $type = "string")`
+### `decrypt(string $data, string $type = "string"): string|array|false`
 
-Encrypts the provided data.
+- **Description**: Decrypts data.
+- **Parameters**:
+  - `$data` *(string)*: Data to be decrypted.
+  - `$type` *(string)*: Type of data (`string` or `array`).
+- **Returns**: Decrypted data or `false` on failure.
 
-- **Parameters:**
-  - `string $data`: Data to be encrypted.
-  - `string $type`: Type of data ('string' or 'array'). Default is 'string'.
-- **Returns:**
-  - `string|false`: MD5 hash of the encrypted data or `false` on failure.
+---
 
-#### `decrypt(string $data, string $type = "string")`
+## Storage Methods
 
-Decrypts the provided data.
+### Local File Storage
 
-- **Parameters:**
-  - `string $data`: Encrypted data to be decrypted.
-  - `string $type`: Type of data ('string' or 'array'). Default is 'string'.
-- **Returns:**
-  - `string|array|false`: Decrypted data or `false` on failure.
+- Encrypts and stores data in a file.
+- Automatically limits file size by removing older lines when `encryptLimitLine` is set.
 
-### Storage Methods
+### Database Storage
 
-#### Local File Storage
+- Requires a user-defined `encryptDBHandler` function.
+- Supports writing encrypted data and reading decrypted data directly from the database.
 
-The local file storage method writes encrypted data to a specified file and handles file management such as maintaining a maximum number of lines.
+---
 
-#### Database Storage
+## Example Use Cases
 
-The database storage method uses a custom closure to handle data operations with the database. The closure must accept two parameters: `$data` (data to be processed) and `$mode` (either 'write' or 'read').
+- Encrypting sensitive data before storing in files or databases.
+- Managing secure storage for web applications or APIs.
+
+---
+
+## Error Handling
+
+The class throws exceptions for:
+- Invalid configurations.
+- Missing required options (e.g., `encryptKey`).
+- Errors during encryption/decryption.
+
+Handle errors using `try-catch` blocks:
+
+```php
+try {
+    $crypt = new Crypto([...]);
+    $encrypted = $crypt->encrypt("Sensitive Data");
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+```
+
+---
+
+## Contributions
+
+Feel free to contribute to enhance the `Crypto` library. Fork the repository and submit pull requests!
+
+---
+
+## License
+
+This library is open-source and licensed under the MIT License.

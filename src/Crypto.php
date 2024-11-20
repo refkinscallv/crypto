@@ -1,126 +1,97 @@
 <?php
 
-    namespace RF\Crypto;
+    namespace RF\Security;
 
     use Exception;
 
     /**
      * Class Crypto
-     * Handles encryption and decryption of data with support for local file and database storage.
      *
-     * @package RF\Crypto
+     * A class for encrypting and decrypting data with support for file-based or database-based storage.
      */
-    class Crypto {
+    class Crypto
+    {
 
-        /**
-         * @var string Secret key for encryption.
-         */
         private string $cryptSecretKey;
-
-        /**
-         * @var string|null Path to the local file for storage.
-         */
-        private ?string $cryptFile;
-
-        /**
-         * @var int Maximum number of lines to keep in the local file.
-         */
+        private string $cryptFile;
         private int $cryptLimitLine;
-
-        /**
-         * @var string Encryption cipher to use.
-         */
         private string $cryptCipherAlgo;
-
-        /**
-         * @var string Storage method, either 'local' or 'database'.
-         */
         private string $cryptStoreMethod;
-
-        /**
-         * @var callable|null Closure function for database operations.
-         */
-        private $dbHandler;
+        private $dbhandler;
 
         /**
          * Crypto constructor.
-         * 
-         * @param array $args Configuration settings.
-         * 
-         * @throws Exception if configuration is invalid.
+         *
+         * @param callable|null $db A database handler callback for database operations.
+         * @throws Exception
          */
-        public function __construct(array $args = []) {
-            if (empty($args)) {
-                throw new Exception("Invalid Crypto Config. Config can't be empty.");
-                return;
-            }
+        public function __construct($db = null)
+        {
+            $this->cryptSecretKey = $_SERVER["ENCRYPT_KEY"] ?? throw new Exception("Encryption key is not defined.");
+            $this->cryptFile = $_SERVER["DOCUMENT_ROOT"] . '/' . ($_SERVER["ENCRYPT_FILE"] ?? 'crypto_storage.txt');
+            $this->cryptLimitLine = (int)($_SERVER["ENCRYPT_LIMIT"] ?? 1000);
+            $this->cryptCipherAlgo = $_SERVER["ENCRYPT_CIPHER"] ?? "AES-256-CBC";
+            $this->cryptStoreMethod = $_SERVER["ENCRYPT_STORE"] ?? "local";
+            $this->dbhandler = $db;
 
-            $this->validationArgs($args);
+            $this->initializeStorage();
         }
 
         /**
-         * Validates and sets configuration arguments.
-         * 
-         * @param array $args Configuration settings.
-         * 
-         * @throws Exception if required settings are missing or invalid.
+         * Initialize the storage system (local file or database).
+         *
+         * @throws Exception If storage method is "database" but no database handler is provided.
          */
-        private function validationArgs(array $args): void {
-            if (!isset($args["encryptKey"])) {
-                throw new Exception("Invalid Crypto Config. array index 'encryptKey' not found.");
-                return;
-            }
-
-            $this->cryptSecretKey = $args["encryptKey"];
-            $this->cryptFile = isset($args["encryptFile"]) ? $_SERVER["DOCUMENT_ROOT"] . $args["encryptFile"] : null;
-            $this->cryptLimitLine = isset($args["encryptLimitLine"]) ? $args["encryptLimitLine"] : 1000;
-            $this->cryptCipherAlgo = isset($args["encryptCipher"]) ? $args["encryptCipher"] : "AES-256-CBC";
-            $this->cryptStoreMethod = isset($args["encryptStoreMethod"]) ? $args["encryptStoreMethod"] : "local";
-            $this->dbHandler = isset($args["encryptDBHandler"]) ? $args["encryptDBHandler"] : null;
-            
-            if ($this->cryptStoreMethod === 'local' && $this->cryptFile) {
+        private function initializeStorage(): void
+        {
+            if ($this->cryptStoreMethod === "local" && $this->cryptFile) {
                 $defaultDir = dirname($this->cryptFile);
-                if (!file_exists($defaultDir)) {
-                    mkdir($defaultDir, 0777, true);
+                if (!is_dir($defaultDir) && !mkdir($defaultDir, 0777, true) && !is_dir($defaultDir)) {
+                    throw new Exception("Failed to create directory: $defaultDir");
                 }
 
-                if (!file_exists($this->cryptFile)) {
-                    file_put_contents($this->cryptFile, '');
+                if (!file_exists($this->cryptFile) && file_put_contents($this->cryptFile, "") === false) {
+                    throw new Exception("Failed to create storage file: $this->cryptFile");
                 }
-            } elseif ($this->cryptStoreMethod === 'database' && !$this->dbHandler) {
+            } elseif ($this->cryptStoreMethod === "database" && !$this->dbhandler) {
                 throw new Exception("Database handler not provided for 'database' storage method.");
-                return;
             }
         }
 
         /**
-         * Sets a custom file path for local storage.
-         * 
-         * @param string $filePath Path to the file.
+         * Set the file path for local storage.
+         *
+         * @param string $filePath The relative file path.
          */
-        public function setFile(string $filePath): void {
-            $this->cryptFile = $_SERVER["DOCUMENT_ROOT"] . $filePath;
+        public function setFile(string $filePath): void
+        {
+            $this->cryptFile = $_SERVER["DOCUMENT_ROOT"] . '/' . ltrim($filePath, '/');
         }
 
         /**
-         * Encrypts the provided data.
-         * 
-         * @param string $data Data to be encrypted.
-         * @param string $type Type of data ('string' or 'array'). Default is 'string'.
-         * 
-         * @return string|false MD5 hash of the encrypted data or false on failure.
+         * Encrypt data.
+         *
+         * @param mixed $data The data to encrypt.
+         * @param string $type The data type ("string" or "array").
+         * @return string|false The MD5 hash of the encrypted data, or false on failure.
          */
-        public function encrypt($data, string $type = "string") {
-            if (!$data) {
+        public function encrypt(mixed $data, string $type = "string"): string|false
+        {
+            if (empty($data)) {
                 return false;
             }
 
             if ($type === "array") {
-                $data = @serialize($data);
+                $data = serialize($data);
             }
 
             $iv = openssl_random_pseudo_bytes(openssl_cipher_iv_length($this->cryptCipherAlgo));
             $encryptedData = openssl_encrypt($data, $this->cryptCipherAlgo, $this->cryptSecretKey, 0, $iv);
+
+            if ($encryptedData === false) {
+                throw new Exception("Failed to encrypt data.");
+            }
+
             $base64Encoded = base64_encode($encryptedData . "::" . $iv);
             $md5hash = md5($base64Encoded);
 
@@ -130,64 +101,66 @@
         }
 
         /**
-         * Decrypts the provided data.
-         * 
-         * @param string $data Encrypted data to be decrypted.
-         * @param string $type Type of data ('string' or 'array'). Default is 'string'.
-         * 
-         * @return string|array|false Decrypted data or false on failure.
+         * Decrypt data.
+         *
+         * @param string $data The data to decrypt.
+         * @param string $type The data type ("string" or "array").
+         * @return mixed The decrypted data, or false on failure.
          */
-        public function decrypt($data, string $type = "string") {
-            if (!$data) {
+        public function decrypt(string $data, string $type = "string"): mixed
+        {
+            if (empty($data)) {
                 return false;
             }
 
-            $data = $this->translatingCrypto($data, "read");
+            $storedData = $this->translatingCrypto($data, "read");
+            $decodedData = explode("::", base64_decode($storedData), 2);
 
-            list($encryptedData, $iv) = explode("::", base64_decode($data), 2) + [null, null];
+            if (count($decodedData) !== 2) {
+                return false;
+            }
+
+            [$encryptedData, $iv] = $decodedData;
+
             $decryptedData = openssl_decrypt($encryptedData, $this->cryptCipherAlgo, $this->cryptSecretKey, 0, $iv);
 
-            if ($type === "array") {
-                return @unserialize($decryptedData);
-            } else {
-                return $decryptedData;
+            if ($decryptedData === false) {
+                throw new Exception("Failed to decrypt data.");
             }
+
+            return $type === "array" ? unserialize($decryptedData) : $decryptedData;
         }
 
         /**
-         * Handles encryption and decryption operations based on storage method.
-         * 
-         * @param string $data Data to be processed.
-         * @param string $mode Operation mode ('write' or 'read').
-         * 
-         * @return string|false Result of the operation or false on failure.
+         * Handle translation between storage and data.
+         *
+         * @param string $data The data to write or read.
+         * @param string $mode The mode ("write" or "read").
+         * @return mixed The result of the operation.
          */
-        private function translatingCrypto(string $data, string $mode) {
-            if ($this->cryptStoreMethod === 'local') {
-                return $this->handleFileOperation($data, $mode);
-            } elseif ($this->cryptStoreMethod === 'database' && $this->dbHandler) {
-                return $this->handleDatabaseOperation($data, $mode);
-            }
-
-            return false;
+        private function translatingCrypto(string $data, string $mode): mixed
+        {
+            return $this->cryptStoreMethod === "local"
+                ? $this->handleFileOperation($data, $mode)
+                : $this->handleDatabaseOperation($data, $mode);
         }
 
         /**
-         * Handles file operations for encryption and decryption.
-         * 
-         * @param string $data Data to be processed.
-         * @param string $mode Operation mode ('write' or 'read').
-         * 
-         * @return string|false Result of the operation or false on failure.
+         * Handle file-based operations.
+         *
+         * @param string $data The data to write or read.
+         * @param string $mode The mode ("write" or "read").
+         * @return mixed The result of the operation.
          */
-        private function handleFileOperation(string $data, string $mode) {
-            if ($mode === 'write') {
-                $cryptoFile = fopen($this->cryptFile, "a");
-                fwrite($cryptoFile, $data . PHP_EOL);
-                fclose($cryptoFile);
-
-                return $this->writeFile($this->cryptLimitLine);
-            } elseif ($mode === 'read') {
+        private function handleFileOperation(string $data, string $mode): mixed
+        {
+            if ($mode === "write") {
+                if (file_put_contents($this->cryptFile, $data . PHP_EOL, FILE_APPEND) === false) {
+                    throw new Exception("Failed to write to storage file: $this->cryptFile");
+                }
+                $this->enforceFileLimit($this->cryptLimitLine);
+                return true;
+            } elseif ($mode === "read") {
                 return $this->readFile($data);
             }
 
@@ -195,61 +168,64 @@
         }
 
         /**
-         * Handles database operations for encryption and decryption.
-         * 
-         * @param string $data Data to be processed.
-         * @param string $mode Operation mode ('write' or 'read').
-         * 
-         * @return string|false Result of the operation or false on failure.
+         * Enforce file size limit.
+         *
+         * @param int $limit The maximum number of lines to retain.
          */
-        private function handleDatabaseOperation(string $data, string $mode) {
-            if (!$this->dbHandler) {
-                return false;
+        private function enforceFileLimit(int $limit): void
+        {
+            $fileContent = file($this->cryptFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+
+            if ($fileContent === false) {
+                throw new Exception("Failed to read storage file: $this->cryptFile");
             }
-
-            $dbOperation = $this->dbHandler;
-
-            if ($mode === 'write') {
-                return $dbOperation($data, 'write');
-            } elseif ($mode === 'read') {
-                return $dbOperation($data, 'read');
-            }
-
-            return false;
-        }
-
-        /**
-         * Writes to the local file, maintaining a maximum number of lines.
-         * 
-         * @param int $limit Maximum number of lines to keep.
-         */
-        private function writeFile(int $limit): void {
-            $fileContent = file($this->cryptFile);
 
             if (count($fileContent) > $limit) {
                 $fileContent = array_slice($fileContent, -$limit);
-                file_put_contents($this->cryptFile, implode("", $fileContent));
+                file_put_contents($this->cryptFile, implode(PHP_EOL, $fileContent));
             }
         }
 
         /**
-         * Reads from the local file and retrieves the data.
-         * 
-         * @param string $data Data to be retrieved.
-         * 
-         * @return string|false Retrieved data or false if not found.
+         * Read a specific data entry from the file.
+         *
+         * @param string $data The data to search for.
+         * @return string|false The corresponding stored data, or false if not found.
          */
-        private function readFile(string $data) {
+        private function readFile(string $data): string|false
+        {
             $fileContent = file($this->cryptFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
 
+            if ($fileContent === false) {
+                throw new Exception("Failed to read storage file: $this->cryptFile");
+            }
+
             foreach ($fileContent as $line) {
-                $part = explode(":", $line);
-                if (count($part) === 2 && $part[1] === $data) {
-                    return $part[0];
+                [$storedData, $hash] = explode(":", $line);
+                if ($hash === $data) {
+                    return $storedData;
                 }
             }
 
             return false;
         }
 
+        /**
+         * Handle database-based operations.
+         *
+         * @param string $data The data to write or read.
+         * @param string $mode The mode ("write" or "read").
+         * @return mixed The result of the database operation.
+         */
+        private function handleDatabaseOperation(string $data, string $mode): mixed
+        {
+            if (!$this->dbhandler) {
+                throw new Exception("Database handler not provided.");
+            }
+
+            return $mode === "write" 
+                ? ($this->dbhandler)($data, "write") 
+                : ($this->dbhandler)($data, "read");
+        }
+        
     }
