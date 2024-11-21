@@ -1,6 +1,6 @@
 <?php
 
-    namespace RF\Security;
+    namespace RF\Crypto;
 
     use Exception;
 
